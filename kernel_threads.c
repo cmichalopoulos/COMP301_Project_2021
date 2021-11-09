@@ -16,7 +16,7 @@ void start_process_thread(){
   void* args = (cur_thread()->ptcb->args); 
 
   exitval = task(argl, args);
-  ThreadExit(exitval);
+  sys_ThreadExit(exitval);
 }
 
 
