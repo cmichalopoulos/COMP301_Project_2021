@@ -38,8 +38,10 @@ static inline void initialize_PCB(PCB* pcb)
   pcb->argl = 0;
   pcb->args = NULL;
 
-  // New attribute thread_count needs to be initialized, probably here
+  // New thing thread_count needs to be initialized, probably here
   pcb->thread_count = 0;
+  // Also initiallizing our list
+  rlnode_init(&pcb->ptcb_list, pcb);
 
   for(int i=0;i<MAX_FILEID;i++)
     pcb->FIDT[i] = NULL;
@@ -319,6 +321,9 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 
 void sys_Exit(int exitval)
 {
+  if(sys_GetPid()==1){
+    while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
+  }
 
   PCB *curproc = CURPROC;  /* cache for efficiency */
   /* First, store the exit status */
