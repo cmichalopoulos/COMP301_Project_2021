@@ -29,41 +29,37 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
    // TCB* tcb = spawn_thread(CURPROC, start_process_thread);  // Initialize and return a new TCB
    // CURPROC -> thread_count++;                                    // Increase by 1 the thread counter
    // Initialize arguments, like I did in sys_Exec
-    PTCB* ptcb = (PTCB* )xmalloc(sizeof(PTCB));   // Memory allocation for a PTCB block 
-    TCB* tcb = CURPROC->main_thread;
 
-    ptcb->tcb = tcb; // Show  at the head tcb
+      PTCB* ptcb = (PTCB* )xmalloc(sizeof(PTCB));   // Memory allocation for a PTCB block 
+     
+      ptcb->task = task;
+      ptcb->argl = argl;
+      ptcb->args = args;
 
-    ptcb->task = task;
-    ptcb->argl = argl;
-    ptcb->args = args;
+      ptcb->exited = 0;
+      ptcb->detached = 0;
+      ptcb->exit_cv = COND_INIT;
+      ptcb->refcount = 1;
+      
+      // Dealing with rlnode list
+      rlnode_init(&(ptcb->ptcb_list_node), ptcb);                     //Initializing the rlnode in PTCB
+      
+      if(task != NULL){
+      
+      TCB* new_tcb = spawn_thread(CURPROC, start_process_thread);  // Initialize and return a new TCB
+      // Connections through PTCB, TCB
+      ptcb->tcb = new_tcb; // PTCB with new_TCB
+      new_tcb->ptcb = ptcb; // new_TCB with PTCB
+      
+      PCB* curproc = CURPROC;
+      curproc->thread_count ++;
 
-    ptcb->exited = 0;
-    ptcb->detached = 0;
-    ptcb->exit_cv = COND_INIT;
-    ptcb->refcount = 1;
-
-    // Connections through PCB, PTCB, TCB
-    ptcb->tcb = tcb; // PTCB with TCB
-    tcb->ptcb = ptcb; // TCB with PTCB
-    // tcb->owner_pcb = pcb->parent; // TCB with PCB, but must check this.
-    CURPROC->thread_count += 1;
-
-    (cur_thread()->ptcb) = ptcb;
-
-    TCB* new_tcb = spawn_thread(CURPROC, start_process_thread);  // Initialize and return a new TCB
-    new_tcb->ptcb = ptcb;
-    ptcb->tcb = new_tcb;
-
-    ptcb->tcb->owner_pcb = new_tcb->owner_pcb;
+      rlist_push_back(&(curproc->ptcb_list), &(ptcb->ptcb_list_node));  //Pushing back on the list the current PTCB element 
     
-    // Dealing with rlnode list
-    rlnode_init(&(ptcb->ptcb_list_node), ptcb);                     //Initializing the rlnode in PTCB
-    rlist_push_back(&(CURPROC->ptcb_list), &(ptcb->ptcb_list_node));  //Pushing back on the list the current PTCB element 
-    
-    wakeup(ptcb->tcb);
-    return (Tid_t)ptcb;
-
+      wakeup(new_tcb);
+      return (Tid_t)ptcb;
+    }
+    return -1;
 }
 
 /**
@@ -86,18 +82,24 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   }
 
   // First, some checks to see if i can join
-  if((Tid_t) (cur_thread()->ptcb) == tid || ptcb == NULL){      // Cannot join self obviously...
+  if((Tid_t) (cur_thread()->ptcb) == tid){      // Cannot join self obviously...
     return -1;
   }
   if (ptcb->detached == 1 && ptcb->exited == 1) {
     return -1;
   } 
-  
-  ptcb->refcount = ptcb->refcount + 1; // there is a new ptcb in town 
+
+  // Check for test_detach_other
+  if(ptcb->detached == 1){
+    if(ptcb->exitval == 0) {
+      return -1;
+    }
+  }
 
   // If you passed the checks, congratulations, now you have to wait and sleep, until the thread running finishes its work
   // If there is a thread running right now, it has to put to sleep all other threads joining.
   while(ptcb->detached == 0  && ptcb->exited == 0){
+    ptcb->refcount = ptcb->refcount + 1; // there is a new ptcb in town 
     kernel_wait(&(ptcb->exit_cv), SCHED_USER);      // kernel_wait puts to temporary sleep incoming threads, waiting for the condvar of current thread to become detached or exited
     ptcb->refcount = ptcb->refcount - 1; // ptcb has left the chat
   }
@@ -110,7 +112,6 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   // Check case when thread is alone in process
   if(ptcb->refcount == 0){
     rlist_remove(&(ptcb->ptcb_list_node));
-    free(ptcb);
   }
   return 0;
 }

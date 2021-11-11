@@ -321,9 +321,9 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 
 void sys_Exit(int exitval)
 {
-  if(sys_GetPid()==1){
-    while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
-  }
+  //if(sys_GetPid()==1){
+  //  while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
+  //}
 
   PCB *curproc = CURPROC;  /* cache for efficiency */
   /* First, store the exit status */
