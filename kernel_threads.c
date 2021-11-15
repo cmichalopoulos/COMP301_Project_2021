@@ -95,12 +95,14 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
       return -1;
     }
   }
-
+	
+   ptcb->refcount = ptcb->refcount + 1; // there is a new ptcb in town 
   // If you passed the checks, congratulations, now you have to wait and sleep, until the thread running finishes its work
   // If there is a thread running right now, it has to put to sleep all other threads joining.
   while(ptcb->detached == 0  && ptcb->exited == 0){
-    ptcb->refcount = ptcb->refcount + 1; // there is a new ptcb in town 
-    kernel_wait(&(ptcb->exit_cv), SCHED_USER);      // kernel_wait puts to temporary sleep incoming threads, waiting for the condvar of current thread to become detached or exited
+    //kernel_wait(&(ptcb->exit_cv), SCHED_USER);      // kernel_wait puts to temporary sleep incoming threads, waiting for the condvar of current thread to become detached or exited
+   if(exitval!=NULL)
+	   *exitval = ptcb->exitval;
     ptcb->refcount = ptcb->refcount - 1; // ptcb has left the chat
   }
   
