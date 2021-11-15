@@ -330,7 +330,13 @@ static void sched_wakeup_expired_timeouts()
 static TCB* sched_queue_select(TCB* current)
 {
 	
-
+	int test = PRIORITY_QUEUE;
+	for (int i=PRIORITY_QUEUE; i>= 0; i--){
+		if(!is_rlist_empty(&SCHED[i])){
+			test = i;
+			i = -1;
+		}
+	}
 	/* Get the head of the SCHED list */
 	rlnode* sel = rlist_pop_front(&SCHED);
 	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
