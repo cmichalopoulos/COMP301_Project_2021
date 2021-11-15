@@ -85,7 +85,6 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   //}
 
   // First, some checks to see if i can join
-  while(ptcb != NULL){
   if((Tid_t) (cur_thread()->ptcb) == tid || (cur_thread()->ptcb->refcount) == 0){      // Cannot join self obviously...
     return -1;
   }
@@ -101,11 +100,6 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
     }
   }
 
-  if(tid == 0){
-    return 0;
-  }
-
-
   // If you passed the checks, congratulations, now you have to wait and sleep, until the thread running finishes its work
   // If there is a thread running right now, it has to put to sleep all other threads joining.
   while(ptcb->detached == 0  && ptcb->exited == 0){
@@ -114,12 +108,15 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
     ptcb->refcount = ptcb->refcount + 1; // there is a new ptcb in town 
     kernel_wait(&(ptcb->exit_cv), SCHED_USER);      // kernel_wait puts to temporary sleep incoming threads, waiting for the condvar of current thread to become detached or exited
     // Saving the exit value...
-    exitval = &(ptcb->exitval);
+    //exitval = &(ptcb->exitval);
     ptcb->refcount = ptcb->refcount - 1; // ptcb has left the chat
 
   }
-    
 
+  if(exitval!=NULL){
+    exitval = &(ptcb->exitval);
+    return 0;
+  } else {exitval = NULL;}
 
   // You are alone... Bye...
   if(ptcb->refcount <= 0){
@@ -127,16 +124,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
       rlist_remove(&(ptcb->ptcb_list_node));
     }
   }
-
-  //if(exitval!=NULL){
-  //  exitval = &(ptcb->exitval);
-  //  return 0;
-  //} else {exitval = NULL;}
-  
-
   return 0;
-}
-return -1;
 }
 
 /**
@@ -144,6 +132,11 @@ return -1;
   */
 int sys_ThreadDetach(Tid_t tid)
 {
+  if(cur_thread() == NULL){
+    return -1;
+  }
+
+
   // Finding the thread to join, connecting it with ptcb
   PTCB* ptcb = (PTCB* ) tid;
   if(!rlist_find(&CURPROC->ptcb_list, ptcb, NULL)){
@@ -184,6 +177,7 @@ if(ptcb!=NULL){
   
   kernel_broadcast(&ptcb->exit_cv);
   CURPROC->thread_count--;
+
 
   // See you soon...
   if(cur_thread()->ptcb->refcount <= 0){
