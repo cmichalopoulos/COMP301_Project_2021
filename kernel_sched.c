@@ -419,7 +419,7 @@ void boost_threads(){
 			rlnode* thr = rlist_pop_front(&SCHED[i]);
 			if(thr->tcb != NULL){
 				thr->tcb->priority += 1;
-				rlist_push_back(&SCHED[i+1], thr);
+				rlist_push_front(&SCHED[i+1], thr);
 			}
 		}
 	}
