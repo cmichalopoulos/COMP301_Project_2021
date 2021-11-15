@@ -330,7 +330,13 @@ static void sched_wakeup_expired_timeouts()
 static TCB* sched_queue_select(TCB* current)
 {
 	
-
+	int test = PRIORITY_QUEUES;
+	for (int i=PRIORITY_QUEUES; i>= 0; i--){
+		if(!is_rlist_empty(&SCHED[i])){
+			test = i;
+			i = -1;
+		}
+	}
 	/* Get the head of the SCHED list */
 	rlnode* sel = rlist_pop_front(&SCHED);
 	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
@@ -413,7 +419,7 @@ void boost_threads(){
 			rlnode* thr = rlist_pop_front(&SCHED[i]);
 			if(thr->tcb != NULL){
 				thr->tcb->priority += 1;
-				rlist_push_back(&SCHED[i+1], thr);
+				rlist_push_front(&SCHED[i+1], thr);
 			}
 		}
 	}
