@@ -21,8 +21,6 @@
 /* Core control blocks */
 CCB cctx[MAX_CORES];
 
-#define PRIORITY_QUEUES 20
-#define YIELDS 10
 
 /* 
 	The current core's CCB. This must only be used in a 
@@ -159,6 +157,8 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 
 	/* Set the owner */
 	tcb->owner_pcb = pcb;
+	tcb->priority = 0;
+	tcb->counter = 0;
 
 	/* Initialize the other attributes */
 	tcb->type = NORMAL_THREAD;
@@ -227,9 +227,7 @@ void release_TCB(TCB* tcb)
   Both of these structures are protected by @c sched_spinlock.
 */
 
-int numof_yield_calls = 0; // num of yield_calls
-
-rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queue */
+rlnode SCHED; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
@@ -272,7 +270,7 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 static void sched_queue_add(TCB* tcb)
 {
 	/* Insert at the end of the scheduling list */
-	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
+	rlist_push_back(&SCHED, &tcb->sched_node);
 
 	/* Restart possibly halted cores */
 	cpu_core_restart_one();
@@ -321,28 +319,19 @@ static void sched_wakeup_expired_timeouts()
 		sched_make_ready(tcb);
 	}
 }
+
 /*
   Remove the head of the scheduler list, if any, and
   return it. Return NULL if the list is empty.
 
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
-
-
 static TCB* sched_queue_select(TCB* current)
 {
-	
-	TCB* next_thread = NULL;
-	int i = PRIORITY_QUEUES;
-	int helper = 0;
-	while(i>0 && helper == 0){
-		rlnode* sel = rlist_pop_front(&SCHED[i]);
-		if(sel->tcb != NULL){
-			next_thread = sel->tcb; /* When the list is empty, this is NULL */
-			helper = 1;	// to escape loop 
-		}
-		else i--;
-	}
+	/* Get the head of the SCHED list */
+	rlnode* sel = rlist_pop_front(&SCHED);
+
+	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
 
 	if (next_thread == NULL)
 		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
@@ -416,22 +405,8 @@ void sleep_releasing(Thread_state state, Mutex* mx, enum SCHED_CAUSE cause,
 
 /* This function is the entry point to the scheduler's context switching */
 
-void boost_threads(){
-	for(int i=0; i<PRIORITY_QUEUES; i++){
-		for(int j = 0; j<rlist_len(&SCHED[i]); j++){
-			rlnode* thr = rlist_pop_front(&SCHED[i]);
-			if(thr->tcb != NULL){
-				thr->tcb->priority += 1;
-				rlist_push_back(&SCHED[i+1], thr);
-			}
-		}
-	}
-}
-
 void yield(enum SCHED_CAUSE cause)
 {
-	numof_yield_calls += 1;
-
 	/* Reset the timer, so that we are not interrupted by ALARM */
 	TimerDuration remaining = bios_cancel_timer();
 
@@ -454,13 +429,6 @@ void yield(enum SCHED_CAUSE cause)
 	/* Wake up threads whose sleep timeout has expired */
 	sched_wakeup_expired_timeouts();
 
-	// Time to do some boosting...
-	if(numof_yield_calls > YIELDS){
-		boost_threads();
-		numof_yield_calls =0;
-	}
-
-
 	/* Get next */
 	TCB* next = sched_queue_select(current);
 	assert(next != NULL);
@@ -476,41 +444,11 @@ void yield(enum SCHED_CAUSE cause)
 		cpu_swap_context(&current->context, &next->context);
 	}
 
-	switch(cause){
-	
-	// When the cause is SCHED_QUANTUM, it means that the thread hasn't completed its task in the given quantum and must give up place and reduce priority by 1
-	case (SCHED_QUANTUM):
-		if(current->priority > 0)
-			current->priority = current->priority - 1;
-		else current->priority = 0;
-	break;
-
-	// When the cause is SCHED_IO, it means that we have a thread waiting for I/O, which means that it will take a little time, and so give it a higher priority
-	case (SCHED_IO): 
-		if(current->priority < PRIORITY_QUEUES)
-			current->priority = current->priority + 1;
-		else current->priority = PRIORITY_QUEUES;
-	break;
-
-	// When i have SCHED_MUTEX, it means that my high priority thread wants a mutex that is currently used by a low priority thread, meaning that i have to decrease
-	// the high-priority thread so that i give the low-priority thread a chance to finish and release the wanted mutex
-	case(SCHED_MUTEX):
-		if((current->priority = current->last_cause) == SCHED_MUTEX)
-			current->priority = current->priority - 1;
-	break;
-
-	default:
-		current->priority = current->priority;
-	break;
-	}
-
 	/* This is where we get after we are switched back on! A long time
 	   may have passed. Start a new timeslice...
 	  */
 	gain(preempt);
 }
-
-
 
 /*
   This function must be called at the beginning of each new timeslice.
@@ -585,10 +523,7 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
-	for(int i=0; i<PRIORITY_QUEUES; i++){
-		rlnode_init(&SCHED[i], NULL);
-	}
-
+	rlnode_init(&SCHED, NULL);
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
 
