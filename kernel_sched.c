@@ -21,7 +21,7 @@
 /* Core control blocks */
 CCB cctx[MAX_CORES];
 
-#define PRIORITY_QUEUES 12
+#define PRIORITY_QUEUES 20
 #define YIELDS 10
 
 /* 
@@ -327,21 +327,22 @@ static void sched_wakeup_expired_timeouts()
 
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
+
+
 static TCB* sched_queue_select(TCB* current)
 {
-	int position = 0;
-	// First check that the list is not empty 
-	for(int i=PRIORITY_QUEUES; i>0; i--){
-		if(!is_rlist_empty(&SCHED[i])){
-			position = i;
-			i = 0;
-			/* Get the head of the SCHED list */
+	
+	TCB* next_thread = NULL;
+	int i = PRIORITY_QUEUES;
+	int helper = 0;
+	while(i>0 && helper == 0){
+		rlnode* sel = rlist_pop_front(&SCHED[i]);
+		if(sel->tcb != NULL){
+			next_thread = sel->tcb; /* When the list is empty, this is NULL */
+			helper = 1;	// to escape loop 
 		}
+		else i--;
 	}
-
-	/* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED[position]);
-	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
 
 	if (next_thread == NULL)
 		next_thread = (current->state == READY) ? current : &CURCORE.idle_thread;
@@ -494,7 +495,7 @@ void yield(enum SCHED_CAUSE cause)
 	// When i have SCHED_MUTEX, it means that my high priority thread wants a mutex that is currently used by a low priority thread, meaning that i have to decrease
 	// the high-priority thread so that i give the low-priority thread a chance to finish and release the wanted mutex
 	case(SCHED_MUTEX):
-		if((current->curr_cause = SCHED_MUTEX) && (current->last_cause = SCHED_MUTEX))
+		if((current->priority = current->last_cause) == SCHED_MUTEX)
 			current->priority = current->priority - 1;
 	break;
 
