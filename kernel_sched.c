@@ -22,7 +22,7 @@
 CCB cctx[MAX_CORES];
 
 #define PRIORITY_QUEUES 20
-#define YIELDS 1000
+#define YIELDS 10
 
 /* 
 	The current core's CCB. This must only be used in a 
@@ -331,7 +331,7 @@ static void sched_wakeup_expired_timeouts()
 
 // Weird to implement. Starting from top queue and goind down, trying to fing a thread, to use as a first. 
 // Integer helper is used to break the loop once the thread is found. 
-// If not found, decrease priority and start again...
+// If not found, decrease priority and start again.....
 static TCB* sched_queue_select(TCB* current)
 {
 	
@@ -417,7 +417,7 @@ void sleep_releasing(Thread_state state, Mutex* mx, enum SCHED_CAUSE cause,
 		preempt_on;
 }
 
-// Function boost threads, boosts threads that are down in priority, starting at priority = 0, after 1000 yields. This happens by finding 
+// Function boost threads, boosts threads that are down in priority, starting at priority = 0, after 10 yields. This happens by finding 
 // threads and adding 1 to their priority.
 void boost_threads(){
 	for(int i=0; i<PRIORITY_QUEUES; i++){
