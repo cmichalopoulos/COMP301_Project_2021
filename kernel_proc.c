@@ -1,10 +1,8 @@
 
-#include "kernel_proc.h"
 #include <assert.h>
 #include "kernel_cc.h"
+#include "kernel_proc.h"
 #include "kernel_streams.h"
-
-
 
 
 /* 
@@ -38,16 +36,12 @@ static inline void initialize_PCB(PCB* pcb)
   pcb->argl = 0;
   pcb->args = NULL;
 
-  // New thing thread_count needs to be initialized, probably here
-  pcb->thread_count = 0;
-  // Also initiallizing our list
-  rlnode_init(&pcb->ptcb_list, pcb);
-
   for(int i=0;i<MAX_FILEID;i++)
     pcb->FIDT[i] = NULL;
 
   rlnode_init(& pcb->children_list, NULL);
   rlnode_init(& pcb->exited_list, NULL);
+  rlnode_init(& pcb->ptcb_list, NULL);
   rlnode_init(& pcb->children_node, pcb);
   rlnode_init(& pcb->exited_node, pcb);
   pcb->child_exit = COND_INIT;
@@ -184,35 +178,26 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     we do, because once we wakeup the new thread it may run! so we need to have finished
     the initialization of the PCB.
    */
-
-  // Creating the main thread
   if(call != NULL) {
 
     newproc->main_thread = spawn_thread(newproc, start_main_thread);
-   // Must create ptcb and initialize everything except rlnode stuff
-
-    PTCB* new_ptcb = (PTCB* )xmalloc(sizeof(PTCB));  // Mem. Allocating for new PTCB
-    new_ptcb->tcb = newproc->main_thread;
-    new_ptcb->task = call; 
-    new_ptcb->argl = argl;
-    new_ptcb->args = args;
+    //Acquiring a new PTCB, by allocating in parallel mem for it
+    PTCB* new_ptcb = (PTCB*)xmalloc(sizeof(PTCB));
+    //Making connections with PCB, TCB
+    new_ptcb->task = newproc->main_task;
+    new_ptcb->argl = newproc->argl;
+    new_ptcb->args = newproc->args;
 
     new_ptcb->exited = 0;
     new_ptcb->detached = 0;
     new_ptcb->exit_cv = COND_INIT;
     new_ptcb->refcount = 0;
 
-    // Initializing list aka rlnode stuff
-    
-    // rlnode_init(&newproc->ptcb_list, newproc);     // For original PCB list 
-    
-
-    rlnode_init(&(new_ptcb->ptcb_list_node), new_ptcb);      // For new PTCB list 
-    rlist_push_back(&(newproc->ptcb_list), &(new_ptcb->ptcb_list_node));  // PCB shows PTCB
+    rlnode_init (&(new_ptcb->ptcb_list_node), new_ptcb);
+    rlist_push_back(&(newproc->ptcb_list), &(new_ptcb->ptcb_list_node));
     new_ptcb->tcb = newproc->main_thread;
     newproc->main_thread->ptcb = new_ptcb;
     newproc->thread_count += 1;
-   
     wakeup(new_ptcb->tcb);
   }
 
@@ -321,25 +306,10 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 
 void sys_Exit(int exitval)
 {
-  //if(sys_GetPid()==1){
-  //  while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
-  //}
 
   PCB *curproc = CURPROC;  /* cache for efficiency */
   /* First, store the exit status */
   curproc->exitval = exitval;
-
-  /* 
-    Here, we must check that we are not the init task. 
-    If we are, we must wait until all child processes exit. 
-   */
-  //if(get_pid(curproc)==1) {
-
-    //while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
-
-  //} 
-
-  // Everything happens in ThreadExit. Lets call it. 
   sys_ThreadExit(exitval);
 }
 
