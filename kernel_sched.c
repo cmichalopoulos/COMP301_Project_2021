@@ -21,8 +21,8 @@
 /* Core control blocks */
 CCB cctx[MAX_CORES];
 
-#define PRIORITY_QUEUES 20
-#define YIELDS 10
+#define PRIORITY_QUEUES 10
+#define YIELDS 50
 
 /* 
 	The current core's CCB. This must only be used in a 
@@ -436,13 +436,16 @@ void boost_threads(){
 
 void yield(enum SCHED_CAUSE cause)
 {
-	numof_yield_calls += 1;
+
+	numof_yield_calls = numof_yield_calls + 1;
 
 	/* Reset the timer, so that we are not interrupted by ALARM */
 	TimerDuration remaining = bios_cancel_timer();
 
 	/* We must stop preemption but save it! */
 	int preempt = preempt_off;
+
+
 
 	TCB* current = CURTHREAD; /* Make a local copy of current process, for speed */
 
@@ -495,17 +498,18 @@ void yield(enum SCHED_CAUSE cause)
 	case (SCHED_IO): 
 		if(current->priority < PRIORITY_QUEUES)
 			current->priority = current->priority + 1;
-		else current->priority = PRIORITY_QUEUES;
+		//else current->priority = PRIORITY_QUEUES;
 	break;
 
 	// When i have SCHED_MUTEX, it means that my high priority thread wants a mutex that is currently used by a low priority thread, meaning that i have to decrease
 	// the high-priority thread so that i give the low-priority thread a chance to finish and release the wanted mutex
 	case(SCHED_MUTEX):
-		if((current->priority = current->last_cause) == SCHED_MUTEX)
+		if((current->priority = current->last_cause) == SCHED_MUTEX) //&& current->priority>0)
 			current->priority = current->priority - 1;
 	break;
 
 	default:
+	for(current->priority = 0; current->priority<PRIORITY_QUEUES; current->priority++)
 		current->priority = current->priority;
 	break;
 	}

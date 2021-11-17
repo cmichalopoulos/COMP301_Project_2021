@@ -10,6 +10,8 @@
 #include "symposium.h"
 #include "tinyoslib.h"
 #include "unit_testing.h"
+#include "tinyos.h"
+#include "kernel_sys.h"
 
 
 /*
@@ -1322,8 +1324,7 @@ int noexit_cleanup_task(int argl, void* args) {
 
 int noexit_cleanup_mthread(int argl, void* args){
 	for(int i=0;i<5;i++)
-		ASSERT(CreateThread(noexit_cleanup_task, 0, NULL) != NOTHREAD);
-
+		ASSERT(CreateThread(noexit_cleanup_task, 0, NULL) != NOTHREAD); 
 	/* This thread calls exit probably before the children all exit */
 	ThreadExit(0);
 	FAIL("We should not be here");

@@ -143,11 +143,11 @@ int sys_ThreadDetach(Tid_t tid)
     return -1;
   }
 
-  if(ptcb != NULL && ptcb->exited == 0){
+  if(ptcb->exited == 0){
     if(ptcb->refcount>0){
       // Detaching current and waking up next in line...
-      ptcb->refcount = 0;  //nobody will join you...
       kernel_broadcast(&(ptcb->exit_cv)); // wakeup from your sleep, time to work 
+      ptcb->refcount = 0;  //nobody will join you 
     }
     ptcb->detached = 1;
 
@@ -169,6 +169,7 @@ void sys_ThreadExit(int exitval)
 PTCB* ptcb = (cur_thread()->ptcb);
 
 // Brute exit now if someone remains...
+if(ptcb!=NULL){
   ptcb->exited = 1;
   ptcb->exitval = exitval;
 
@@ -184,9 +185,9 @@ PTCB* ptcb = (cur_thread()->ptcb);
     curproc->thread_count = curproc->thread_count -1;
   }
 
-  //if(get_pid(CURPROC) == 1){
-  //  while(sys_WaitChild(NOPROC, NULL) != NOPROC);
-  //} else {
+  if(get_pid(CURPROC) == 1){
+    while(sys_WaitChild(NOPROC, NULL) != NOPROC);
+  } else {
       // If you are the final thread
       if(curproc->thread_count==0){
         /* Reparent any children of the exiting process to the 
@@ -209,7 +210,7 @@ PTCB* ptcb = (cur_thread()->ptcb);
         rlist_push_front(& curproc->parent->exited_list, &curproc->exited_node);
         kernel_broadcast(& curproc->parent->child_exit);   
       }
-  //  }
+    }
   assert(is_rlist_empty(& curproc->children_list));
   assert(is_rlist_empty(& curproc->exited_list));
 
@@ -238,7 +239,7 @@ PTCB* ptcb = (cur_thread()->ptcb);
   /* Now, mark the process as exited. */
   curproc->pstate = ZOMBIE;
   curproc->exitval = exitval;
-
+}
 
   
   /* Bye-bye cruel world */
